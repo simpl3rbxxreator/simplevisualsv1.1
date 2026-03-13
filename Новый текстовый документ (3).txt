@@ -1,0 +1,137 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+
+-- Настройки
+local Settings = {
+    Enabled = false,
+    Names = false,
+    Circles = false,
+    MaxDist = 500,
+    Transparency = 0.5,
+    Color = Color3.fromRGB(0, 255, 255)
+}
+
+-- ГУИ
+local ScreenGui = Instance.new("ScreenGui", CoreGui)
+local Main = Instance.new("Frame", ScreenGui)
+Main.Size = UDim2.new(0, 220, 0, 460)
+Main.Position = UDim2.new(0.05, 0, 0.2, 0)
+Main.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+Main.Active = true
+Main.Draggable = true
+Instance.new("UICorner", Main)
+
+local function CreateToggle(text, pos, prop)
+    local btn = Instance.new("TextButton", Main)
+    btn.Size = UDim2.new(0, 180, 0, 35)
+    btn.Position = pos
+    btn.BackgroundColor3 = Color3.fromRGB(150, 40, 40)
+    btn.Text = text .. ": OFF"
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.Font = Enum.Font.GothamBold
+    Instance.new("UICorner", btn)
+    btn.MouseButton1Click:Connect(function()
+        Settings[prop] = not Settings[prop]
+        btn.Text = text .. (Settings[prop] and ": ON" or ": OFF")
+        btn.BackgroundColor3 = Settings[prop] and Color3.fromRGB(40, 150, 40) or Color3.fromRGB(150, 40, 40)
+    end)
+end
+
+local function CreateSlider(text, min, max, pos, prop)
+    local frame = Instance.new("Frame", Main)
+    frame.Size = UDim2.new(0, 180, 0, 45); frame.Position = pos; frame.BackgroundTransparency = 1
+    local lab = Instance.new("TextLabel", frame)
+    lab.Size = UDim2.new(1, 0, 0, 15); lab.Text = text .. ": " .. math.floor(Settings[prop]); lab.TextColor3 = Color3.new(0.8, 0.8, 0.8); lab.BackgroundTransparency = 1
+    local bar = Instance.new("Frame", frame); bar.Size = UDim2.new(1, 0, 0, 6); bar.Position = UDim2.new(0, 0, 0, 25); bar.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
+    local fill = Instance.new("Frame", bar); fill.Size = UDim2.new((Settings[prop] - min) / (max - min), 0, 1, 0); fill.BackgroundColor3 = Settings.Color
+    
+    local dragging = false
+    local function update()
+        local m = UserInputService:GetMouseLocation()
+        local rel = math.clamp((m.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
+        fill.Size = UDim2.new(rel, 0, 1, 0)
+        Settings[prop] = (prop == "Transparency") and rel or math.floor(min + (max - min) * rel)
+        lab.Text = text .. ": " .. (prop == "Transparency" and math.floor(Settings[prop]*100) or Settings[prop])
+    end
+    bar.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true end end)
+    UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end end)
+    RunService.RenderStepped:Connect(function() if dragging then update() end fill.BackgroundColor3 = Settings.Color end)
+end
+
+-- Кнопки
+CreateToggle("Chams ESP", UDim2.new(0, 20, 0, 50), "Enabled")
+CreateToggle("Show Names", UDim2.new(0, 20, 0, 100), "Names")
+CreateToggle("Neon Circles", UDim2.new(0, 20, 0, 150), "Circles")
+CreateSlider("Distance", 50, 3000, UDim2.new(0, 20, 0, 210), "MaxDist")
+CreateSlider("Transparency", 0, 1, UDim2.new(0, 20, 0, 270), "Transparency")
+
+local function CreateColorBtn(color, pos)
+    local btn = Instance.new("TextButton", Main)
+    btn.Size = UDim2.new(0, 55, 0, 25); btn.Position = pos; btn.BackgroundColor3 = color; btn.Text = ""
+    Instance.new("UICorner", btn)
+    btn.MouseButton1Click:Connect(function() Settings.Color = color end)
+end
+CreateColorBtn(Color3.fromRGB(0, 255, 255), UDim2.new(0, 20, 0, 330))
+CreateColorBtn(Color3.fromRGB(255, 0, 50), UDim2.new(0, 82, 0, 330))
+CreateColorBtn(Color3.fromRGB(0, 255, 100), UDim2.new(0, 145, 0, 330))
+
+-- УЛУЧШЕННАЯ ФУНКЦИЯ КРУГА
+local function updateFloatingCircle(char, inRange)
+    local circle = char:FindFirstChild("NeonCircleESP")
+    if Settings.Circles and inRange then
+        if not circle then
+            circle = Instance.new("Part")
+            circle.Name = "NeonCircleESP"
+            circle.Shape = Enum.PartType.Ball
+            circle.Size = Vector3.new(3, 3, 3)
+            -- Настройки прозрачности для мышки и игрока:
+            circle.CanCollide = false
+            circle.CanTouch = false
+            circle.CanQuery = false -- Мышка будет проходить сквозь него (нельзя схватить)
+            circle.CastShadow = false
+            circle.Anchored = true
+            circle.Material = Enum.Material.Neon
+            circle.Parent = char
+        end
+        local offset = math.sin(tick() * 3) * 2
+        circle.Position = char.HumanoidRootPart.Position + Vector3.new(0, 6 + offset, 0)
+        circle.Color = Settings.Color
+        circle.Transparency = 0.4 -- Фиксированная прозрачность для видимости неона
+    else
+        if circle then circle:Destroy() end
+    end
+end
+
+-- Цикл
+RunService.RenderStepped:Connect(function()
+    local lp = Players.LocalPlayer
+    if not lp.Character or not lp.Character:FindFirstChild("HumanoidRootPart") then return end
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= lp and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local char = p.Character
+            local dist = (lp.Character.HumanoidRootPart.Position - char.HumanoidRootPart.Position).Magnitude
+            local inRange = dist <= Settings.MaxDist
+
+            -- Chams
+            local h = char:FindFirstChild("Final_H") or Instance.new("Highlight", char)
+            h.Name = "Final_H"; h.Enabled = Settings.Enabled and inRange
+            h.FillColor = Settings.Color; h.FillTransparency = Settings.Transparency
+            h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+
+            -- Обновление кругов
+            updateFloatingCircle(char, inRange)
+
+            -- Ники
+            local head = char:FindFirstChild("Head")
+            if head then
+                local tag = head:FindFirstChild("Final_T") or Instance.new("BillboardGui", head)
+                tag.Name = "Final_T"; tag.Size = UDim2.new(0,100,0,20); tag.AlwaysOnTop = true; tag.Enabled = Settings.Names and inRange
+                local l = tag:FindFirstChild("L") or Instance.new("TextLabel", tag); l.Name = "L"; l.BackgroundTransparency = 1; l.Size = UDim2.new(1,0,1,0)
+                l.TextColor3 = Settings.Color; l.Text = p.Name .. " [" .. math.floor(dist) .. "m]"; l.Font = Enum.Font.GothamBold
+            end
+        end
+    end
+end)
